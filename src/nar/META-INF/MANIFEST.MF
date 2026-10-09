@@ -1,0 +1,8 @@
+Manifest-Version: 1.0
+Nar-Id: nifi-jproton-amqp-nar
+Nar-Group: com.swim.nifi
+Nar-Version: 1.0.0
+Nar-Dependency-Group: org.apache.nifi
+Nar-Dependency-Id: nifi-standard-services-api-nar
+Nar-Dependency-Version: 2.12.0
+Build-Jdk-Spec: 21

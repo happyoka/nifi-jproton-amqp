@@ -1,0 +1,2 @@
+com.swim.nifi.amqp.processor.PublishAMQP_1_0
+com.swim.nifi.amqp.processor.ConsumeAMQP_1_0

@@ -1,0 +1,85 @@
+plugins {
+    id 'java-library'
+}
+
+group = 'com.swim.nifi'
+version = '1.0.0'
+description = 'Apache NiFi AMQP 1.0 extension built for NiFi with Qpid ProtonJ2'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withJavadocJar()
+    withSourcesJar()
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    nifiVersion = '2.12.0'
+    protonVersion = '1.3.0'
+}
+
+configurations {
+    narRuntime {
+        canBeConsumed = false
+        canBeResolved = true
+        extendsFrom runtimeClasspath
+    }
+}
+
+dependencies {
+    // API Dependencies (Provided by NiFi Parent Classloader at runtime)
+    compileOnly "org.apache.nifi:nifi-api:${nifiVersion}"
+    compileOnly "org.apache.nifi:nifi-ssl-context-service-api:${nifiVersion}"
+    compileOnly "org.apache.nifi:nifi-security-utils-api:${nifiVersion}"
+
+    // Third-party libraries to bundle into the NAR
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.3'
+    implementation "org.apache.qpid:protonj2-client:${protonVersion}"
+    implementation 'org.slf4j:slf4j-api:2.0.17'
+
+    // Test dependencies
+    testImplementation "org.apache.nifi:nifi-security-utils-api:${nifiVersion}"
+    testImplementation "org.apache.nifi:nifi-ssl-context-service-api:${nifiVersion}"
+    testImplementation "org.apache.nifi:nifi-mock:${nifiVersion}"
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.13.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.13.4'
+}
+
+tasks.named('jar') {
+    manifest {
+        attributes(
+                'Implementation-Title': project.name,
+                'Implementation-Version': project.version
+        )
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+tasks.register('nar', Zip) {
+    group = 'build'
+    description = 'Builds a NiFi NAR archive.'
+    destinationDirectory = layout.buildDirectory.dir('libs')
+    archiveBaseName = project.name
+    archiveVersion = project.version.toString()
+    archiveExtension = 'nar'
+
+    from('src/nar')
+
+    into('NAR-INF/bundled-dependencies') {
+        from(tasks.named('jar'))
+        // FIX 2: Only bundle runtimeClasspath (excludes compileOnly dependencies)
+        from(configurations.runtimeClasspath)
+    }
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('nar')
+}
