@@ -34,7 +34,6 @@ class FlowFileAttributeMapperTest {
     assertEquals("subject-1", outboundMessage.subject());
     assertEquals("queue://orders", outboundMessage.address());
     assertEquals("acme", outboundMessage.applicationProperties().get("tenant"));
-    assertEquals("00-abc-def-01", outboundMessage.applicationProperties().get("traceparent"));
   }
 
   /** Verifies that inbound metadata becomes FlowFile attributes with the expected prefixes. */
@@ -65,8 +64,6 @@ class FlowFileAttributeMapperTest {
     assertEquals("subject-2", attributes.get("amqp.subject"));
     assertEquals("acme", attributes.get("amqp.application.tenant"));
     assertEquals("00-xyz-uvw-01", attributes.get("amqp.application.traceparent"));
-    assertEquals("00-xyz-uvw-01", attributes.get("traceparent"));
-    assertEquals("k=v", attributes.get("baggage"));
     assertEquals("4", attributes.get("amqp.delivery-annotation.partition"));
     assertTrue(attributes.containsKey("amqp.header.priority"));
   }

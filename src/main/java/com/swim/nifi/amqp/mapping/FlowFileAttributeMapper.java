@@ -7,7 +7,6 @@ import com.swim.nifi.amqp.model.InboundMessage;
 import com.swim.nifi.amqp.model.OutboundMessage;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.apache.qpid.protonj2.client.Message;
@@ -16,13 +15,17 @@ import org.apache.qpid.protonj2.client.exceptions.ClientException;
 /** Maps NiFi FlowFile attributes to AMQP message metadata and back again. */
 public final class FlowFileAttributeMapper {
 
-  public static final String AMQP_PREFIX = "amqp.";
-  public static final String HEADER_PREFIX = "amqp.header.";
+  /**
+   * The property name prefix used to identify custom application-level message headers or
+   * properties that should be extracted from or injected into AMQP messages.
+   */
   public static final String APPLICATION_PREFIX = "amqp.application.";
-  public static final String DELIVERY_ANNOTATION_PREFIX = "amqp.delivery-annotation.";
 
-  private static final List<String> TELEMETRY_KEYS =
-      List.of("traceparent", "tracestate", "baggage");
+  /**
+   * The property name prefix used to identify delivery annotation that should be extracted from or
+   * injected into AMQP messages.
+   */
+  public static final String DELIVERY_ANNOTATION_PREFIX = "amqp.delivery-annotation.";
 
   private final ObjectMapper objectMapper;
 
@@ -61,27 +64,6 @@ public final class FlowFileAttributeMapper {
     return value == null ? null : Long.valueOf(value);
   }
 
-  private static void copyTelemetryToApplicationProperties(
-      final Map<String, String> attributes, final Map<String, Object> applicationProperties) {
-    TELEMETRY_KEYS.forEach(
-        key -> {
-          final String value = attributes.get(key);
-          if (value != null) {
-            applicationProperties.putIfAbsent(key, value);
-          }
-        });
-  }
-
-  private static void copyTelemetryToCanonicalAttributes(final Map<String, String> attributes) {
-    TELEMETRY_KEYS.forEach(
-        key -> {
-          final String value = attributes.get(APPLICATION_PREFIX + key);
-          if (value != null) {
-            attributes.put(key, value);
-          }
-        });
-  }
-
   /**
    * Creates an outbound AMQP message model from FlowFile attributes and content bytes.
    *
@@ -104,8 +86,6 @@ public final class FlowFileAttributeMapper {
         deliveryAnnotations.put(key.substring(DELIVERY_ANNOTATION_PREFIX.length()), value);
       }
     }
-    copyTelemetryToApplicationProperties(attributes, applicationProperties);
-
     return new OutboundMessage(
         body,
         resolve(addressOverride, attributes.get("amqp.to")),
@@ -200,7 +180,6 @@ public final class FlowFileAttributeMapper {
     inboundMessage
         .deliveryAnnotations()
         .forEach((key, value) -> put(attributes, DELIVERY_ANNOTATION_PREFIX + key, value));
-    copyTelemetryToCanonicalAttributes(attributes);
     return attributes;
   }
 
@@ -211,16 +190,20 @@ public final class FlowFileAttributeMapper {
    * @return serialized payload bytes
    */
   public byte[] toPayloadBytes(final Object body) {
-    if (body == null) {
-      return new byte[0];
-    }
-    if (body instanceof byte[] bytes) {
-      return bytes;
-    }
-    if (body instanceof String stringValue) {
-      return stringValue.getBytes(StandardCharsets.UTF_8);
-    }
-    try {
+      switch (body) {
+          case null -> {
+              return new byte[0];
+          }
+          case byte[] bytes -> {
+              return bytes;
+          }
+          case String stringValue -> {
+              return stringValue.getBytes(StandardCharsets.UTF_8);
+          }
+          default -> {
+          }
+      }
+      try {
       return objectMapper.writeValueAsBytes(body);
     } catch (final JsonProcessingException exception) {
       throw new UnparseableAmqpMessageException(

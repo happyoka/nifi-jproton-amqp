@@ -31,7 +31,6 @@ final class DeliveryAcknowledgement implements AmqpAcknowledgement {
     if (!settled.compareAndSet(false, true)) {
       return;
     }
-
     Exception failure = null;
     try {
       switch (settlementMode) {
@@ -43,7 +42,6 @@ final class DeliveryAcknowledgement implements AmqpAcknowledgement {
     } catch (final Exception exception) {
       failure = exception;
     }
-
     if (failure != null) {
       throw new RetryableAmqpException("Failed to settle consumed AMQP message", failure);
     }

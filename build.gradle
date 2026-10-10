@@ -41,6 +41,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.3'
     implementation "org.apache.qpid:protonj2-client:${protonVersion}"
     implementation 'org.slf4j:slf4j-api:2.0.17'
+    implementation("org.apache.commons:commons-lang3:3.21.0")
 
     // Test dependencies
     testImplementation "org.apache.nifi:nifi-security-utils-api:${nifiVersion}"
