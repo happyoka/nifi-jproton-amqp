@@ -56,7 +56,7 @@ import org.apache.qpid.protonj2.client.exceptions.ClientException;
 public class ConsumeAmqp10 extends AbstractAmqpProcessor<AmqpConsumer> {
 
   /** A property descriptor defining the credit window behavior used for consuming messages. */
-  public static final PropertyDescriptor CREDIT_WINDOW =
+  static final PropertyDescriptor CREDIT_WINDOW =
       new PropertyDescriptor.Builder()
           .name("Credit Window")
           .description("Receiver credit window. Set to 0 to request one message at a time.")
@@ -66,7 +66,7 @@ public class ConsumeAmqp10 extends AbstractAmqpProcessor<AmqpConsumer> {
           .build();
 
   /** A property descriptor defining the receive timeout behavior used for consuming messages. */
-  public static final PropertyDescriptor RECEIVE_TIMEOUT =
+  static final PropertyDescriptor RECEIVE_TIMEOUT =
       new PropertyDescriptor.Builder()
           .name("Receive Timeout")
           .description("Maximum wait for a message before yielding.")
@@ -76,7 +76,7 @@ public class ConsumeAmqp10 extends AbstractAmqpProcessor<AmqpConsumer> {
           .build();
 
   /** A property descriptor defining the auto-acknowledge behavior used for consuming messages. */
-  public static final PropertyDescriptor AUTO_ACKNOWLEDGE =
+  static final PropertyDescriptor AUTO_ACKNOWLEDGE =
       new PropertyDescriptor.Builder()
           .name("Auto-Acknowledge Messages")
           .description(
@@ -93,7 +93,7 @@ public class ConsumeAmqp10 extends AbstractAmqpProcessor<AmqpConsumer> {
    * The relationship representing FlowFiles that have been successfully processed, produced, or
    * consumed and routed onward in the NiFi data flow.
    */
-  public static final Relationship REL_SUCCESS =
+  static final Relationship REL_SUCCESS =
       new Relationship.Builder()
           .name("success")
           .description(
@@ -112,13 +112,18 @@ public class ConsumeAmqp10 extends AbstractAmqpProcessor<AmqpConsumer> {
           .defaultValue("10")
           .required(true)
           .build();
-  private static final List<PropertyDescriptor> PROPERTY_DESCRIPTORS =
+  static final List<PropertyDescriptor> PROPERTY_DESCRIPTORS =
       Stream.concat(
               getCommonPropertyDescriptors().stream(),
               Stream.of(RECEIVE_TIMEOUT, BATCH_SIZE, AUTO_ACKNOWLEDGE, CREDIT_WINDOW))
           .toList();
 
-  private static final Set<Relationship> RELATIONSHIPS = Set.of(REL_SUCCESS);
+  static final Set<Relationship> RELATIONSHIPS = Set.of(REL_SUCCESS);
+
+  /** Constructs a new ConsumeAmqp10 processor instance. */
+  public ConsumeAmqp10() {
+    super();
+  }
 
   @Override
   protected void processResource(

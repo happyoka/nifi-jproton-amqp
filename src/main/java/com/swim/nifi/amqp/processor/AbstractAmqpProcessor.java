@@ -22,6 +22,7 @@ import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.ssl.SSLContextService;
 import org.apache.qpid.protonj2.client.Client;
+import org.apache.qpid.protonj2.client.ClientOptions;
 import org.apache.qpid.protonj2.client.Connection;
 import org.apache.qpid.protonj2.client.ConnectionOptions;
 
@@ -31,7 +32,7 @@ import org.apache.qpid.protonj2.client.ConnectionOptions;
  */
 abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProcessor {
   /** A property descriptor defining the target AMQP host used for connecting to the broker */
-  public static final PropertyDescriptor HOST =
+  protected static final PropertyDescriptor HOST =
       new PropertyDescriptor.Builder()
           .name("Host")
           .description("AMQP broker host name or IP address.")
@@ -41,7 +42,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .build();
 
   /** A property descriptor defining the target AMQP port used for connecting to the broker */
-  public static final PropertyDescriptor PORT =
+  protected static final PropertyDescriptor PORT =
       new PropertyDescriptor.Builder()
           .name("Port")
           .description("AMQP broker listener port.")
@@ -54,7 +55,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
    * A property descriptor defining the target AMQP address (queue or topic name) used for
    * publishing or consuming messages.
    */
-  public static final PropertyDescriptor ADDRESS =
+  protected static final PropertyDescriptor ADDRESS =
       new PropertyDescriptor.Builder()
           .name("Address")
           .description(
@@ -66,7 +67,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .build();
 
   /** A property descriptor defining the username used for connecting to the broker */
-  public static final PropertyDescriptor USERNAME =
+  protected static final PropertyDescriptor USERNAME =
       new PropertyDescriptor.Builder()
           .name("Username")
           .description("Optional SASL user name for broker authentication.")
@@ -75,7 +76,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .build();
 
   /** A property descriptor defining the password used for connecting to the broker */
-  public static final PropertyDescriptor PASSWORD =
+  protected static final PropertyDescriptor PASSWORD =
       new PropertyDescriptor.Builder()
           .name("Password")
           .description("Optional SASL password for broker authentication.")
@@ -85,7 +86,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .build();
 
   /** A property descriptor defining the virtual host used for connecting to the broker */
-  public static final PropertyDescriptor VIRTUAL_HOST =
+  protected static final PropertyDescriptor VIRTUAL_HOST =
       new PropertyDescriptor.Builder()
           .name("Virtual Host")
           .description(
@@ -94,8 +95,21 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
           .build();
 
+  /**
+   * A property descriptor allowing users to configure a custom client identifier
+   * for the AMQP connection. This identifier is used to uniquely track the client
+   * container with the message broker.
+   */
+  protected static final PropertyDescriptor CLIENT_ID = new PropertyDescriptor.Builder()
+          .name("Client ID")
+          .displayName("Client ID")
+          .description("The client identifier used to uniquely identify the connection or durable subscription context with the AMQP broker.")
+          .required(false)
+          .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+          .build();
+
   /** A property descriptor defining the reconnect enabled for connection option */
-  public static final PropertyDescriptor RECONNECT_ENABLED =
+  protected static final PropertyDescriptor RECONNECT_ENABLED =
       new PropertyDescriptor.Builder()
           .name("Reconnect Enabled")
           .description(
@@ -107,7 +121,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .build();
 
   /** A property descriptor defining the trace frames for connection option */
-  public static final PropertyDescriptor TRACE_FRAMES =
+  protected static final PropertyDescriptor TRACE_FRAMES =
       new PropertyDescriptor.Builder()
           .name("Trace Frames")
           .description(
@@ -122,7 +136,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
    * A property descriptor indicating whether Transport Layer Security (TLS) should be enabled for
    * secure communication channels with the AMQP broker.
    */
-  public static final PropertyDescriptor TLS_ENABLED =
+  protected static final PropertyDescriptor TLS_ENABLED =
       new PropertyDescriptor.Builder()
           .name("TLS Enabled")
           .description("Whether to use TLS/SSL for broker connection.")
@@ -136,7 +150,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
    * A property descriptor defining the NiFi SSL Context Service used to supply secure socket layer
    * (SSL/TLS) key store and trust store settings for broker connections.
    */
-  public static final PropertyDescriptor SSL_CONTEXT_SERVICE =
+  protected static final PropertyDescriptor SSL_CONTEXT_SERVICE =
       new PropertyDescriptor.Builder()
           .name("SSL Context Service")
           .description(
@@ -149,7 +163,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
    * A property descriptor that determines whether the client should verify the broker's hostname
    * against its TLS/SSL certificate during the secure handshake.
    */
-  public static final PropertyDescriptor TLS_VERIFY_HOST =
+  protected static final PropertyDescriptor TLS_VERIFY_HOST =
       new PropertyDescriptor.Builder()
           .name("TLS Verify Host")
           .description("Whether to verify the broker's hostname in the certificate.")
@@ -164,7 +178,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
    * handshake, typically used for testing or development environments to bypass strict certificate
    * verification.
    */
-  public static final PropertyDescriptor TLS_TRUST_ALL =
+  protected static final PropertyDescriptor TLS_TRUST_ALL =
       new PropertyDescriptor.Builder()
           .name("TLS Trust All")
           .description(
@@ -180,7 +194,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
    * topic-based consumption, allowing the broker to retain and accumulate messages while the
    * consumer is disconnected or offline.
    */
-  public static final PropertyDescriptor DURABLE_SUBSCRIPTION =
+  protected static final PropertyDescriptor DURABLE_SUBSCRIPTION =
       new PropertyDescriptor.Builder()
           .name("Durable Subscription")
           .description(
@@ -196,10 +210,11 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
       List.of(
           HOST,
           PORT,
+          VIRTUAL_HOST,
           ADDRESS,
           USERNAME,
           PASSWORD,
-          VIRTUAL_HOST,
+          CLIENT_ID,
           RECONNECT_ENABLED,
           TRACE_FRAMES,
           TLS_ENABLED,
@@ -347,6 +362,26 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
   }
 
   /**
+   * Creates and initializes an AMQP {@link Client} instance. If a custom client ID
+   * is configured in the process context, it applies it via {@link ClientOptions};
+   * otherwise, it initializes the client with default options.
+   *
+   * @param context the process context containing component properties and flow file attributes
+   * @return the initialized {@link Client} instance
+   */
+  private Client createClient(final ProcessContext context) {
+    if (context.getProperty(CLIENT_ID).isSet()) {
+      final String clientId = context.getProperty(CLIENT_ID).evaluateAttributeExpressions().getValue();
+      if (clientId != null && !clientId.trim().isEmpty()) {
+        final ClientOptions clientOptions = new ClientOptions();
+        clientOptions.id(clientId);
+        return Client.create(clientOptions);
+      }
+    }
+    return Client.create();
+  }
+
+  /**
    * Creates a new AMQP connection using the provided ProcessContext.
    *
    * @param context instance of {@link ProcessContext}
@@ -356,7 +391,8 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
     String host = context.getProperty(HOST).evaluateAttributeExpressions().getValue();
     int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
     getLogger().info("Opening AMQP connection to {}:{}", host, port);
-    final Client client = Client.create();
+
+    Client client = this.createClient(context);
     final ConnectionOptions options =
         new ConnectionOptions()
             .reconnectEnabled(

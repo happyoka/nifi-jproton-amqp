@@ -51,7 +51,7 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
    * A property descriptor that defines the maximum amount of time to wait for a message send or
    * publish operation to complete before timing out.
    */
-  public static final PropertyDescriptor SEND_TIMEOUT =
+  static final PropertyDescriptor SEND_TIMEOUT =
       new PropertyDescriptor.Builder()
           .name("Send Timeout")
           .description("Maximum wait for remote settlement when publishing.")
@@ -61,10 +61,28 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
           .build();
 
   /**
+   * Property descriptor defining whether the messaging destination functions as a Queue
+   * (point-to-point / anycast) or a Topic (publish-subscribe / multicast).
+   *
+   * <p>This governs how the client and broker route messages—directing payloads to a single
+   * consumer queue or broadcasting them across multiple subscriptions depending on the underlying
+   * messaging implementation.
+   */
+  static final PropertyDescriptor DESTINATION_TYPE =
+      new PropertyDescriptor.Builder()
+          .name("Destination Type")
+          .description("The type of destination to use (either a Queue or a Topic).")
+          .required(true)
+          .allowableValues("QUEUE", "TOPIC")
+          .defaultValue("TOPIC")
+          .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+          .build();
+
+  /**
    * The relationship representing FlowFiles that have been successfully processed, produced, or
    * consumed and routed onward in the NiFi data flow.
    */
-  public static final Relationship REL_SUCCESS =
+  static final Relationship REL_SUCCESS =
       new Relationship.Builder()
           .name("success")
           .description(
@@ -75,12 +93,14 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
    * The relationship representing FlowFiles that failed to be processed, produced, or consumed and
    * cannot be routed to success or retry paths.
    */
-  public static final Relationship REL_FAILURE =
+  static final Relationship REL_FAILURE =
       new Relationship.Builder()
           .name("failure")
           .description(
               "All FlowFiles that cannot be routed to the AMQP destination are routed to this relationship")
           .build();
+
+  static final Set<Relationship> RELATIONSHIPS = Set.of(REL_SUCCESS, REL_FAILURE);
 
   /**
    * The maximum allowable size limit for an input FlowFile payload (set to 10 MB), used as a
@@ -93,7 +113,7 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
    * permitted for processing, preventing excessively large messages from overwhelming system memory
    * or resources.
    */
-  public static final PropertyDescriptor MAXIMUM_INPUT_FLOWFILE_SIZE =
+  static final PropertyDescriptor MAXIMUM_INPUT_FLOWFILE_SIZE =
       new PropertyDescriptor.Builder()
           .name("Maximum Input FlowFile Size")
           .description(
@@ -103,19 +123,23 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
                     broker limits and available JVM memory.
                     """)
           .required(true)
-          .defaultValue("12 MB")
+          .defaultValue("10 MB")
           .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
           .addValidator(
               StandardValidators.createDataSizeBoundsValidator(
                   1, MAXIMUM_INPUT_FLOWFILE_SIZE_LIMIT))
           .build();
 
-  private static final List<PropertyDescriptor> PROPERTY_DESCRIPTORS =
+  static final List<PropertyDescriptor> PROPERTY_DESCRIPTORS =
       Stream.concat(
               getCommonPropertyDescriptors().stream(),
-              Stream.of(SEND_TIMEOUT, MAXIMUM_INPUT_FLOWFILE_SIZE))
+              Stream.of(DESTINATION_TYPE, SEND_TIMEOUT, MAXIMUM_INPUT_FLOWFILE_SIZE))
           .toList();
-  private static final Set<Relationship> RELATIONSHIPS = Set.of(REL_SUCCESS, REL_FAILURE);
+
+  /** Constructs a new PublishAmqp10 processor instance. */
+  public PublishAmqp10() {
+    super();
+  }
 
   @Override
   protected void processResource(
@@ -159,8 +183,10 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
   protected AmqpPublisher createAMQPWorker(ProcessContext context, Connection connection) {
     try {
       final String address = context.getProperty(ADDRESS).getValue();
+      final String destinationType = context.getProperty(DESTINATION_TYPE).getValue();
       final var sendTimeout = duration(context, SEND_TIMEOUT, Duration.ofSeconds(15)).toMillis();
-      return new AmqpPublisher(connection, address, sendTimeout, getLogger());
+      return new AmqpPublisher(
+          connection, address, destinationType.equalsIgnoreCase("TOPIC"), sendTimeout, getLogger());
     } catch (final ClientException ioe) {
       throw new ProcessException("Failed to connect to AMQP Broker", ioe);
     }

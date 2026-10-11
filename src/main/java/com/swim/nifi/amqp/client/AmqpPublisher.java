@@ -17,6 +17,7 @@ public class AmqpPublisher extends AmqpWorker {
 
   private final Sender sender;
   private final String address;
+  private final boolean topicDestinationType;
   private final long senderTimeout;
   private final PayloadGenerator payloadGenerator;
 
@@ -26,6 +27,8 @@ public class AmqpPublisher extends AmqpWorker {
    *
    * @param connection the underlying AMQP client connection to the broker
    * @param address the target address associated with this publisher instance
+   * @param topicDestinationType flag indicating whether the destination is treated as a Topic
+   *     (true) or a Queue (false)
    * @param senderTimeout the timeout duration in milliseconds for sending operations and
    *     acknowledgments
    * @param processorLog the logging component used to record publisher lifecycle events and errors
@@ -35,14 +38,39 @@ public class AmqpPublisher extends AmqpWorker {
   public AmqpPublisher(
       final Connection connection,
       final String address,
+      final boolean topicDestinationType,
       final long senderTimeout,
       final ComponentLog processorLog)
       throws ClientException {
     super(connection, processorLog);
     this.payloadGenerator = new PayloadGenerator();
+    this.topicDestinationType = topicDestinationType;
     this.senderTimeout = senderTimeout;
     this.address = address;
     this.sender = session.openAnonymousSender();
+  }
+
+  /**
+   * Normalizes and builds the destination address string based on the active destination type.
+   *
+   * <p>Behavior:
+   *
+   * <ul>
+   *   <li>If topic destination type is disabled or the address is blank, returns the address as-is.
+   *   <li>If enabled and the address does not start with "topic://", prepends the prefix.
+   * </ul>
+   *
+   * @param address the raw destination address string
+   * @return the formatted address string, or null if the conditions match the final fallback
+   */
+  private String buildAddress(final String address) {
+    if (!topicDestinationType || address == null || address.trim().isEmpty()) {
+      return address;
+    }
+    if (!address.toLowerCase().startsWith("topic://")) {
+      return "topic://" + address.trim();
+    }
+    return null;
   }
 
   /**
@@ -67,7 +95,7 @@ public class AmqpPublisher extends AmqpWorker {
           mapper.toMessage(
               new OutboundMessage(
                   outboundMessage.body(),
-                  address,
+                  this.buildAddress(address),
                   outboundMessage.messageId(),
                   outboundMessage.creationTime(),
                   outboundMessage.correlationId(),

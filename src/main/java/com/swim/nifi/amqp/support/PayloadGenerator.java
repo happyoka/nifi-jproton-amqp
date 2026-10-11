@@ -8,6 +8,9 @@ import org.apache.nifi.processor.ProcessSession;
 /** Reads FlowFile content into a contiguous payload buffer for AMQP publication. */
 public final class PayloadGenerator {
 
+  /** Constructs a PayloadGenerator processor instance. */
+  public PayloadGenerator() {}
+
   private static void copy(final byte[] bytes, final ByteArrayOutputStream outputStream)
       throws IOException {
     outputStream.write(bytes);

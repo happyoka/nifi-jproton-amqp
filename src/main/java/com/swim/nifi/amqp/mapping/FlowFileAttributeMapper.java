@@ -190,20 +190,19 @@ public final class FlowFileAttributeMapper {
    * @return serialized payload bytes
    */
   public byte[] toPayloadBytes(final Object body) {
-      switch (body) {
-          case null -> {
-              return new byte[0];
-          }
-          case byte[] bytes -> {
-              return bytes;
-          }
-          case String stringValue -> {
-              return stringValue.getBytes(StandardCharsets.UTF_8);
-          }
-          default -> {
-          }
+    switch (body) {
+      case null -> {
+        return new byte[0];
       }
-      try {
+      case byte[] bytes -> {
+        return bytes;
+      }
+      case String stringValue -> {
+        return stringValue.getBytes(StandardCharsets.UTF_8);
+      }
+      default -> {}
+    }
+    try {
       return objectMapper.writeValueAsBytes(body);
     } catch (final JsonProcessingException exception) {
       throw new UnparseableAmqpMessageException(
