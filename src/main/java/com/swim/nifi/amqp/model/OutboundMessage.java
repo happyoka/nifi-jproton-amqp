@@ -19,6 +19,7 @@ import java.util.Map;
  * @param durable durable header value
  * @param priority priority header value
  * @param timeToLive time-to-live header value in milliseconds
+ * @param payloadKind logical payload kind, such as TEXT or BINARY, carried as metadata
  */
 public record OutboundMessage(
     byte[] body,
@@ -34,4 +35,5 @@ public record OutboundMessage(
     Map<String, Object> deliveryAnnotations,
     Boolean durable,
     Byte priority,
-    Long timeToLive) {}
+    Long timeToLive,
+    String payloadKind) {}

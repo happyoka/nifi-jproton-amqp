@@ -19,6 +19,7 @@ import java.util.Map;
  * @param creationTime creation timestamp header value in milliseconds
  * @param applicationProperties AMQP application properties
  * @param deliveryAnnotations AMQP delivery annotations
+ * @param payloadKind logical payload kind, such as TEXT or BINARY, carried as metadata
  */
 public record InboundMessage(
     byte[] body,
@@ -34,4 +35,5 @@ public record InboundMessage(
     Long timeToLive,
     Long creationTime,
     Map<String, Object> applicationProperties,
-    Map<String, Object> deliveryAnnotations) {}
+    Map<String, Object> deliveryAnnotations,
+    String payloadKind) {}

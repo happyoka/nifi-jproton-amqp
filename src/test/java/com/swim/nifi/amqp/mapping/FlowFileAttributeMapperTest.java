@@ -55,7 +55,8 @@ class FlowFileAttributeMapperTest {
             1000L,
             2000L,
             Map.of("tenant", "acme", "traceparent", "00-xyz-uvw-01", "baggage", "k=v"),
-            Map.of("partition", 4));
+            Map.of("partition", 4),
+            FlowFileAttributeMapper.PAYLOAD_KIND_TEXT);
 
     final Map<String, String> attributes = mapper.toFlowFileAttributes(inboundMessage);
 
@@ -66,5 +67,36 @@ class FlowFileAttributeMapperTest {
     assertEquals("00-xyz-uvw-01", attributes.get("amqp.application.traceparent"));
     assertEquals("4", attributes.get("amqp.delivery-annotation.partition"));
     assertTrue(attributes.containsKey("amqp.header.priority"));
+  }
+
+  /** Verifies that a textual payload kind emits a String-backed AMQP body while preserving byte[] semantics otherwise. */
+  @Test
+  void shouldCreateTextMessageBodyWhenPayloadKindIsText() {
+    final FlowFileAttributeMapper mapper = new FlowFileAttributeMapper(new ObjectMapper());
+    final OutboundMessage outboundMessage =
+        new OutboundMessage(
+            "hello".getBytes(StandardCharsets.UTF_8),
+            "queue://orders",
+            "msg-3",
+            null,
+            "corr-3",
+            "subject-3",
+            null,
+            "text/plain",
+            null,
+            Map.of(),
+            Map.of(),
+            null,
+            null,
+            null,
+            FlowFileAttributeMapper.PAYLOAD_KIND_TEXT);
+
+    try {
+      final var message = mapper.toMessage(outboundMessage);
+      assertEquals("hello", message.body());
+      assertEquals("text/plain", message.contentType());
+    } catch (final Exception exception) {
+      throw new AssertionError("Expected a TEXT payload to be emitted as a String body", exception);
+    }
   }
 }

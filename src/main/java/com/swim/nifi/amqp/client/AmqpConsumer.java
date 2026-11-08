@@ -1,6 +1,7 @@
 package com.swim.nifi.amqp.client;
 
 import com.swim.nifi.amqp.exception.UnparseableAmqpMessageException;
+import com.swim.nifi.amqp.mapping.FlowFileAttributeMapper;
 import com.swim.nifi.amqp.model.ConsumedMessage;
 import com.swim.nifi.amqp.model.InboundMessage;
 import com.swim.nifi.amqp.model.SettlementMode;
@@ -89,9 +90,13 @@ public class AmqpConsumer extends AmqpWorker implements Runnable {
       final Message<?> message = delivery.message();
       final Map<String, Object> annotations =
           Optional.ofNullable(delivery.annotations()).orElseGet(LinkedHashMap::new);
+      final Object body = message.body();
+      final String payloadKind =
+          FlowFileAttributeMapper.resolvePayloadKind(
+              body, null);
       final InboundMessage inboundMessage =
           new InboundMessage(
-              mapper.toPayloadBytes(message.body()),
+              mapper.toPayloadBytes(body),
               stringValue(message.messageId()),
               stringValue(message.correlationId()),
               message.subject(),
@@ -104,7 +109,8 @@ public class AmqpConsumer extends AmqpWorker implements Runnable {
               message.timeToLive(),
               message.creationTime(),
               copyProperties(message),
-              annotations);
+              annotations,
+              payloadKind);
 
       final Map<String, String> attributes = mapper.toFlowFileAttributes(inboundMessage);
       final DeliveryAcknowledgement acknowledgement = new DeliveryAcknowledgement(delivery);

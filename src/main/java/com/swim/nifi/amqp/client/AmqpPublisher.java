@@ -91,7 +91,7 @@ public class AmqpPublisher extends AmqpWorker {
             ? outboundMessage.address()
             : this.address;
     try {
-      final Message<byte[]> message =
+      final Message<?> message =
           mapper.toMessage(
               new OutboundMessage(
                   outboundMessage.body(),
@@ -107,7 +107,8 @@ public class AmqpPublisher extends AmqpWorker {
                   outboundMessage.deliveryAnnotations(),
                   outboundMessage.durable(),
                   outboundMessage.priority(),
-                  outboundMessage.timeToLive()));
+                  outboundMessage.timeToLive(),
+                  outboundMessage.payloadKind()));
       final Tracker tracker =
           outboundMessage.deliveryAnnotations().isEmpty()
               ? sender.send(message)
