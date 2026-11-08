@@ -96,14 +96,16 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .build();
 
   /**
-   * A property descriptor allowing users to configure a custom client identifier
-   * for the AMQP connection. This identifier is used to uniquely track the client
-   * container with the message broker.
+   * A property descriptor allowing users to configure a custom client identifier for the AMQP
+   * connection. This identifier is used to uniquely track the client container with the message
+   * broker.
    */
-  protected static final PropertyDescriptor CLIENT_ID = new PropertyDescriptor.Builder()
+  protected static final PropertyDescriptor CLIENT_ID =
+      new PropertyDescriptor.Builder()
           .name("Client ID")
           .displayName("Client ID")
-          .description("The client identifier used to uniquely identify the connection or durable subscription context with the AMQP broker.")
+          .description(
+              "The client identifier used to uniquely identify the connection or durable subscription context with the AMQP broker.")
           .required(false)
           .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
           .build();
@@ -362,16 +364,17 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
   }
 
   /**
-   * Creates and initializes an AMQP {@link Client} instance. If a custom client ID
-   * is configured in the process context, it applies it via {@link ClientOptions};
-   * otherwise, it initializes the client with default options.
+   * Creates and initializes an AMQP {@link Client} instance. If a custom client ID is configured in
+   * the process context, it applies it via {@link ClientOptions}; otherwise, it initializes the
+   * client with default options.
    *
    * @param context the process context containing component properties and flow file attributes
    * @return the initialized {@link Client} instance
    */
   private Client createClient(final ProcessContext context) {
     if (context.getProperty(CLIENT_ID).isSet()) {
-      final String clientId = context.getProperty(CLIENT_ID).evaluateAttributeExpressions().getValue();
+      final String clientId =
+          context.getProperty(CLIENT_ID).evaluateAttributeExpressions().getValue();
       if (clientId != null && !clientId.trim().isEmpty()) {
         final ClientOptions clientOptions = new ClientOptions();
         clientOptions.id(clientId);

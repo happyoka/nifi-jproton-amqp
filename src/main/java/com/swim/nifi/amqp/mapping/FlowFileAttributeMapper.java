@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.swim.nifi.amqp.exception.UnparseableAmqpMessageException;
 import com.swim.nifi.amqp.model.InboundMessage;
 import com.swim.nifi.amqp.model.OutboundMessage;
+import com.swim.nifi.amqp.model.PayloadKindType;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,6 +27,12 @@ public final class FlowFileAttributeMapper {
    * injected into AMQP messages.
    */
   public static final String DELIVERY_ANNOTATION_PREFIX = "amqp.delivery-annotation.";
+
+  /**
+   * The property name prefix used to identify body payload kind that should be extracted from or
+   * injected into AMQP messages.
+   */
+  public static final String PAYLOAD_KIND_ATTRIBUTE = "amqp.payload-kind";
 
   private final ObjectMapper objectMapper;
 
@@ -65,6 +72,46 @@ public final class FlowFileAttributeMapper {
   }
 
   /**
+   * Resolves the payload kind based on an explicitly provided kind or by inspecting the runtime
+   * type of the given body object.
+   *
+   * <p>Resolution precedence and logic:
+   *
+   * <ol>
+   *   <li>If {@code explicitPayloadKind} is non-null and not blank, it is returned immediately.
+   *   <li>If {@code body} is a {@link Character} or {@link CharSequence}, it resolves to {@link
+   *       PayloadKindType#TEXT}.
+   *   <li>If {@code body} is a {@link Map}, {@link Iterable}, {@link Number}, or {@link Boolean},
+   *       it resolves to {@link PayloadKindType#STRUCTURED}.
+   *   <li>Otherwise, it defaults to {@link PayloadKindType#BINARY}.
+   * </ol>
+   *
+   * @param body the payload object used for type inference if no explicit kind is given
+   * @param explicitPayloadKind an optional explicit payload kind string that takes precedence if
+   *     present
+   * @return the resolved payload kind name as a string
+   */
+  public static String resolvePayloadKind(final Object body, final String explicitPayloadKind) {
+    if (explicitPayloadKind != null && !explicitPayloadKind.isBlank()) {
+      return explicitPayloadKind;
+    }
+    if (body instanceof Character || body instanceof CharSequence) {
+      return PayloadKindType.TEXT.name();
+    }
+    if (body instanceof Map
+        || body instanceof Iterable
+        || body instanceof Number
+        || body instanceof Boolean) {
+      return PayloadKindType.STRUCTURED.name();
+    }
+    return PayloadKindType.BINARY.name();
+  }
+
+  private static String decodeTextPayload(final byte[] body) {
+    return new String(body, StandardCharsets.UTF_8);
+  }
+
+  /**
    * Creates an outbound AMQP message model from FlowFile attributes and content bytes.
    *
    * @param attributes FlowFile attributes
@@ -100,7 +147,8 @@ public final class FlowFileAttributeMapper {
         deliveryAnnotations,
         toBoolean(attributes.get("amqp.header.durable")),
         toByte(attributes.get("amqp.header.priority")),
-        toLong(attributes.get("amqp.header.ttl")));
+        toLong(attributes.get("amqp.header.ttl")),
+        resolvePayloadKind(body, attributes.get(PAYLOAD_KIND_ATTRIBUTE)));
   }
 
   /**
@@ -109,8 +157,13 @@ public final class FlowFileAttributeMapper {
    * @param outboundMessage outbound message model
    * @return ProtonJ2 message instance
    */
-  public Message<byte[]> toMessage(final OutboundMessage outboundMessage) {
-    final Message<byte[]> message = Message.create(outboundMessage.body());
+  public Message<?> toMessage(final OutboundMessage outboundMessage) {
+    final boolean emitTextBody =
+        PayloadKindType.TEXT.name().equalsIgnoreCase(outboundMessage.payloadKind());
+    final Message<?> message =
+        emitTextBody
+            ? Message.create(decodeTextPayload(outboundMessage.body()))
+            : Message.create(outboundMessage.body());
     try {
       if (outboundMessage.address() != null) {
         message.to(outboundMessage.address());
@@ -174,6 +227,7 @@ public final class FlowFileAttributeMapper {
     put(attributes, "amqp.header.durable", inboundMessage.durable());
     put(attributes, "amqp.header.priority", inboundMessage.priority());
     put(attributes, "amqp.header.ttl", inboundMessage.timeToLive());
+    put(attributes, PAYLOAD_KIND_ATTRIBUTE, inboundMessage.payloadKind());
     inboundMessage
         .applicationProperties()
         .forEach((key, value) -> put(attributes, APPLICATION_PREFIX + key, value));
@@ -185,6 +239,11 @@ public final class FlowFileAttributeMapper {
 
   /**
    * Converts an arbitrary inbound AMQP body object to bytes suitable for a FlowFile payload.
+   *
+   * <p>The canonical wire and FlowFile payload remains a byte[]; String is treated as a
+   * special-case optimization that preserves text semantics while encoding to UTF-8 bytes before
+   * the payload is persisted or sent. All non-String values continue to follow the existing
+   * binary/serialized byte[] contract.
    *
    * @param body inbound AMQP body object
    * @return serialized payload bytes
