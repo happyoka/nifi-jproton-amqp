@@ -3,6 +3,7 @@ package com.swim.nifi.amqp.client;
 import com.swim.nifi.amqp.exception.RetryableAmqpException;
 import com.swim.nifi.amqp.model.OutboundMessage;
 import com.swim.nifi.amqp.support.PayloadGenerator;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.logging.ComponentLog;
@@ -67,10 +68,10 @@ public class AmqpPublisher extends AmqpWorker {
     if (!topicDestinationType || address == null || address.trim().isEmpty()) {
       return address;
     }
-    if (!address.toLowerCase().startsWith("topic://")) {
-      return "topic://" + address.trim();
+    if (address.toLowerCase(Locale.ROOT).startsWith("topic://")) {
+      return address.trim();
     }
-    return null;
+    return "topic://" + address.trim();
   }
 
   /**
@@ -109,6 +110,14 @@ public class AmqpPublisher extends AmqpWorker {
                   outboundMessage.priority(),
                   outboundMessage.timeToLive(),
                   outboundMessage.payloadKind()));
+      this.processorLog.debug(
+          "Publishing AMQP message: address={}, payloadKind={}, contentType={}, bodyLength={}, messageId={}, subject={}",
+          this.buildAddress(address),
+          outboundMessage.payloadKind(),
+          outboundMessage.contentType(),
+          outboundMessage.body() == null ? 0 : outboundMessage.body().length,
+          outboundMessage.messageId(),
+          outboundMessage.subject());
       final Tracker tracker =
           outboundMessage.deliveryAnnotations().isEmpty()
               ? sender.send(message)
