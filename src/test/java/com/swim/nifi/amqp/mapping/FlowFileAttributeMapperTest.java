@@ -9,6 +9,8 @@ import com.swim.nifi.amqp.model.OutboundMessage;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import com.swim.nifi.amqp.model.PayloadKindType;
 import org.junit.jupiter.api.Test;
 
 /** Tests metadata mapping between FlowFile attributes and AMQP message models. */
@@ -56,7 +58,7 @@ class FlowFileAttributeMapperTest {
             2000L,
             Map.of("tenant", "acme", "traceparent", "00-xyz-uvw-01", "baggage", "k=v"),
             Map.of("partition", 4),
-            FlowFileAttributeMapper.PAYLOAD_KIND_TEXT);
+            PayloadKindType.TEXT.name());
 
     final Map<String, String> attributes = mapper.toFlowFileAttributes(inboundMessage);
 
@@ -89,7 +91,7 @@ class FlowFileAttributeMapperTest {
             null,
             null,
             null,
-            FlowFileAttributeMapper.PAYLOAD_KIND_TEXT);
+            PayloadKindType.TEXT.name());
 
     try {
       final var message = mapper.toMessage(outboundMessage);

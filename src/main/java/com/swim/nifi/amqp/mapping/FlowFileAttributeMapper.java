@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.swim.nifi.amqp.exception.UnparseableAmqpMessageException;
 import com.swim.nifi.amqp.model.InboundMessage;
 import com.swim.nifi.amqp.model.OutboundMessage;
+import com.swim.nifi.amqp.model.PayloadKindType;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -27,10 +28,11 @@ public final class FlowFileAttributeMapper {
    */
   public static final String DELIVERY_ANNOTATION_PREFIX = "amqp.delivery-annotation.";
 
+  /**
+   * The property name prefix used to identify body payload kind that should be extracted from or
+   * injected into AMQP messages.
+   */
   public static final String PAYLOAD_KIND_ATTRIBUTE = "amqp.payload-kind";
-  public static final String PAYLOAD_KIND_TEXT = "TEXT";
-  public static final String PAYLOAD_KIND_BINARY = "BINARY";
-  public static final String PAYLOAD_KIND_STRUCTURED = "STRUCTURED";
 
   private final ObjectMapper objectMapper;
 
@@ -69,21 +71,40 @@ public final class FlowFileAttributeMapper {
     return value == null ? null : Long.valueOf(value);
   }
 
-  public static String resolvePayloadKind(
-      final Object body, final String explicitPayloadKind) {
+  /**
+   * Resolves the payload kind based on an explicitly provided kind or by inspecting the runtime
+   * type of the given body object.
+   *
+   * <p>Resolution precedence and logic:
+   *
+   * <ol>
+   *   <li>If {@code explicitPayloadKind} is non-null and not blank, it is returned immediately.
+   *   <li>If {@code body} is a {@link Character} or {@link CharSequence}, it resolves to {@link
+   *       PayloadKindType#TEXT}.
+   *   <li>If {@code body} is a {@link Map}, {@link Iterable}, {@link Number}, or {@link Boolean},
+   *       it resolves to {@link PayloadKindType#STRUCTURED}.
+   *   <li>Otherwise, it defaults to {@link PayloadKindType#BINARY}.
+   * </ol>
+   *
+   * @param body the payload object used for type inference if no explicit kind is given
+   * @param explicitPayloadKind an optional explicit payload kind string that takes precedence if
+   *     present
+   * @return the resolved payload kind name as a string
+   */
+  public static String resolvePayloadKind(final Object body, final String explicitPayloadKind) {
     if (explicitPayloadKind != null && !explicitPayloadKind.isBlank()) {
       return explicitPayloadKind;
     }
     if (body instanceof Character || body instanceof CharSequence) {
-      return PAYLOAD_KIND_TEXT;
+      return PayloadKindType.TEXT.name();
     }
-    if (body instanceof byte[]) {
-      return PAYLOAD_KIND_BINARY;
+    if (body instanceof Map
+        || body instanceof Iterable
+        || body instanceof Number
+        || body instanceof Boolean) {
+      return PayloadKindType.STRUCTURED.name();
     }
-    if (body instanceof Map || body instanceof Iterable || body instanceof Number || body instanceof Boolean) {
-      return PAYLOAD_KIND_STRUCTURED;
-    }
-    return PAYLOAD_KIND_BINARY;
+    return PayloadKindType.BINARY.name();
   }
 
   private static String decodeTextPayload(final byte[] body) {
@@ -127,9 +148,7 @@ public final class FlowFileAttributeMapper {
         toBoolean(attributes.get("amqp.header.durable")),
         toByte(attributes.get("amqp.header.priority")),
         toLong(attributes.get("amqp.header.ttl")),
-        resolvePayloadKind(
-            body,
-            attributes.get(PAYLOAD_KIND_ATTRIBUTE)));
+        resolvePayloadKind(body, attributes.get(PAYLOAD_KIND_ATTRIBUTE)));
   }
 
   /**
@@ -139,7 +158,8 @@ public final class FlowFileAttributeMapper {
    * @return ProtonJ2 message instance
    */
   public Message<?> toMessage(final OutboundMessage outboundMessage) {
-    final boolean emitTextBody = PAYLOAD_KIND_TEXT.equalsIgnoreCase(outboundMessage.payloadKind());
+    final boolean emitTextBody =
+        PayloadKindType.TEXT.name().equalsIgnoreCase(outboundMessage.payloadKind());
     final Message<?> message =
         emitTextBody
             ? Message.create(decodeTextPayload(outboundMessage.body()))
