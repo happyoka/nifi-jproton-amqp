@@ -17,6 +17,14 @@ public record AmqpResource<T extends AmqpWorker>(Connection connection, T worker
 
   @Override
   public void close() {
-    worker.close();
+    try {
+      if (worker != null) {
+        worker.close();
+      }
+    } finally {
+      if (connection != null) {
+        connection.close();
+      }
+    }
   }
 }

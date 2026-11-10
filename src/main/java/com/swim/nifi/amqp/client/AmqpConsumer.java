@@ -91,9 +91,7 @@ public class AmqpConsumer extends AmqpWorker implements Runnable {
       final Map<String, Object> annotations =
           Optional.ofNullable(delivery.annotations()).orElseGet(LinkedHashMap::new);
       final Object body = message.body();
-      final String payloadKind =
-          FlowFileAttributeMapper.resolvePayloadKind(
-              body, null);
+      final String payloadKind = FlowFileAttributeMapper.resolvePayloadKind(body, null);
       final InboundMessage inboundMessage =
           new InboundMessage(
               mapper.toPayloadBytes(body),

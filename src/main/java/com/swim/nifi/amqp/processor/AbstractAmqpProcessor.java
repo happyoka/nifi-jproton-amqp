@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.components.PropertyDescriptor;
@@ -224,6 +225,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           TLS_VERIFY_HOST,
           TLS_TRUST_ALL,
           DURABLE_SUBSCRIPTION);
+  private final AtomicBoolean transportFailure = new AtomicBoolean(false);
   private BlockingQueue<AmqpResource<T>> resourceQueue;
 
   /**
@@ -283,7 +285,9 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
 
   private void closeResource(AmqpResource<T> resource) {
     try {
-      resource.close();
+      if (resource != null) {
+        resource.close();
+      }
     } catch (Exception e) {
       getLogger().error("Failed to close AMQP Connection", e);
     }
@@ -417,6 +421,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
     }
     options.sslOptions().verifyHost(context.getProperty(TLS_VERIFY_HOST).asBoolean());
     options.sslOptions().trustAll(context.getProperty(TLS_TRUST_ALL).asBoolean());
+    options.sslOptions().sslEnabled(context.getProperty(TLS_ENABLED).asBoolean());
     final SSLContextService sslContextService =
         context.getProperty(SSL_CONTEXT_SERVICE).asControllerService(SSLContextService.class);
     if (sslContextService != null) {
@@ -432,6 +437,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
         options.sslOptions().trustStoreType(sslContextService.getTrustStoreType());
       }
     }
+    configureConnectionFailureHandlers(options);
 
     try {
       final Connection connection = client.connect(host, port, options);
@@ -465,5 +471,73 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
       classify(exception, "Failed to open AMQP connection");
       throw new RetryableAmqpException("Failed to open AMQP connection", exception);
     }
+  }
+
+  /**
+   * Marks a transport failure for the specified AMQP connection, logging the error, cleaning up
+   * associated resources from the resource queue, and closing the connection.
+   *
+   * <p>This method ensures that transport failure handling executes at most once by utilizing an
+   * atomic compare-and-set flag ({@code transportFailure}). If a failure has already been marked,
+   * subsequent calls are ignored.
+   *
+   * @param connection the {@link Connection} where the transport failure occurred; if {@code null},
+   *     the method returns immediately
+   * @param eventName a string describing the context or event name during which the failure
+   *     occurred (e.g., {@code "interrupted"} or {@code "disconnected"})
+   * @param failure the {@link Throwable} cause of the failure, or {@code null} if unknown
+   */
+  private void markTransportFailure(
+      final Connection connection, final String eventName, final Throwable failure) {
+    if (connection == null || !transportFailure.compareAndSet(false, true)) {
+      return;
+    }
+    getLogger()
+        .error(
+            "AMQP transport failure detected on connection {} during {}: {}",
+            connection,
+            eventName,
+            failure == null ? "unknown cause" : failure.getMessage(),
+            failure);
+    if (resourceQueue != null) {
+      resourceQueue.removeIf(resource -> resource != null && resource.connection() == connection);
+    }
+    try {
+      connection.close();
+    } catch (Exception closingEx) {
+      getLogger().warn("Failed to close AMQP connection after transport failure", closingEx);
+    }
+  }
+
+  /**
+   * Configures the connection failure handlers for the provided connection options.
+   *
+   * <p>This method registers two handlers on the given {@link ConnectionOptions} instance:
+   *
+   * <ul>
+   *   <li><strong>Interrupted Handler:</strong> Captures when a connection is interrupted and
+   *       invokes {@link #markTransportFailure(Connection, String, Throwable)} with the status
+   *       {@code "interrupted"} and the underlying failure cause, if available.
+   *   <li><strong>Disconnected Handler:</strong> Captures when a connection is disconnected and
+   *       invokes {@link #markTransportFailure(Connection, String, Throwable)} with the status
+   *       {@code "disconnected"} and the underlying failure cause, if available.
+   * </ul>
+   *
+   * @param options the {@link ConnectionOptions} instance to configure with failure and
+   *     disconnection handlers; must not be {@code null}
+   */
+  private void configureConnectionFailureHandlers(final ConnectionOptions options) {
+    options.interruptedHandler(
+        (connection, event) ->
+            markTransportFailure(
+                connection,
+                "interrupted",
+                event == null || event.failureCause() == null ? null : event.failureCause()));
+    options.disconnectedHandler(
+        (connection, event) ->
+            markTransportFailure(
+                connection,
+                "disconnected",
+                event == null || event.failureCause() == null ? null : event.failureCause()));
   }
 }
