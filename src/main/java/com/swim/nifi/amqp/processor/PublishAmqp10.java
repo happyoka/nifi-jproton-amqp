@@ -152,10 +152,15 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
     if (flowFile == null) {
       return;
     }
+    final String address =
+        context
+            .getProperty(ADDRESS)
+            .evaluateAttributeExpressions(flowFile.getAttributes())
+            .getValue();
     final long maximumInputFlowFileSize =
         context
             .getProperty(MAXIMUM_INPUT_FLOWFILE_SIZE)
-            .evaluateAttributeExpressions()
+            .evaluateAttributeExpressions(flowFile.getAttributes())
             .asDataSize(DataUnit.B)
             .longValue();
     if (flowFile.getSize() > maximumInputFlowFileSize) {
@@ -166,9 +171,10 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
               flowFile.getSize(),
               maximumInputFlowFileSize);
       session.transfer(flowFile, REL_FAILURE);
+      return;
     }
     try {
-      publisher.publish(flowFile, session);
+      publisher.publish(flowFile, session, address);
       session.transfer(flowFile, REL_SUCCESS);
     } catch (RetryableAmqpException e) {
       session.rollback();
@@ -182,11 +188,10 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
   @Override
   protected AmqpPublisher createAMQPWorker(ProcessContext context, Connection connection) {
     try {
-      final String address = context.getProperty(ADDRESS).getValue();
       final String destinationType = context.getProperty(DESTINATION_TYPE).getValue();
       final var sendTimeout = duration(context, SEND_TIMEOUT, Duration.ofSeconds(15)).toMillis();
       return new AmqpPublisher(
-          connection, address, destinationType.equalsIgnoreCase("TOPIC"), sendTimeout, getLogger());
+          connection, destinationType.equalsIgnoreCase("TOPIC"), sendTimeout, getLogger());
     } catch (final ClientException ioe) {
       throw new ProcessException("Failed to connect to AMQP Broker", ioe);
     }

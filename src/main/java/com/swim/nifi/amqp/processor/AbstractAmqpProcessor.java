@@ -16,6 +16,7 @@ import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.ValidationContext;
 import org.apache.nifi.components.ValidationResult;
+import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.processor.ProcessSession;
@@ -65,6 +66,7 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .required(true)
           .defaultValue("queue://example")
           .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+          .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
           .build();
 
   /** A property descriptor defining the username used for connecting to the broker */

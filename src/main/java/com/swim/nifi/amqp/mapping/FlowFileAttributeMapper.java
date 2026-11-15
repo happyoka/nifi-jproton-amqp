@@ -52,13 +52,6 @@ public final class FlowFileAttributeMapper {
     }
   }
 
-  private static String resolve(final String preferred, final String fallback) {
-    if (preferred != null && !preferred.isBlank()) {
-      return preferred;
-    }
-    return fallback;
-  }
-
   private static Boolean toBoolean(final String value) {
     return value == null ? null : Boolean.valueOf(value);
   }
@@ -116,11 +109,11 @@ public final class FlowFileAttributeMapper {
    *
    * @param attributes FlowFile attributes
    * @param body FlowFile payload bytes
-   * @param addressOverride optional processor-level address override
+   * @param address destination address of the message
    * @return outbound message model
    */
   public OutboundMessage toOutboundMessage(
-      final Map<String, String> attributes, final byte[] body, final String addressOverride) {
+      final Map<String, String> attributes, final byte[] body, final String address) {
     final Map<String, Object> applicationProperties = new LinkedHashMap<>();
     final Map<String, Object> deliveryAnnotations = new LinkedHashMap<>();
 
@@ -135,7 +128,7 @@ public final class FlowFileAttributeMapper {
     }
     return new OutboundMessage(
         body,
-        resolve(addressOverride, attributes.get("amqp.to")),
+        address,
         attributes.get("amqp.message-id"),
         toLong(attributes.get("amqp.creationTime")),
         attributes.get("amqp.correlation-id"),

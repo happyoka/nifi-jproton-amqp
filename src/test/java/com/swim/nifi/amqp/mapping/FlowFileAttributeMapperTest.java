@@ -1,16 +1,16 @@
 package com.swim.nifi.amqp.mapping;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.swim.nifi.amqp.model.InboundMessage;
 import com.swim.nifi.amqp.model.OutboundMessage;
+import com.swim.nifi.amqp.model.PayloadKindType;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
-import com.swim.nifi.amqp.model.PayloadKindType;
 import org.junit.jupiter.api.Test;
 
 /** Tests metadata mapping between FlowFile attributes and AMQP message models. */
@@ -29,7 +29,8 @@ class FlowFileAttributeMapperTest {
     attributes.put("traceparent", "00-abc-def-01");
 
     final OutboundMessage outboundMessage =
-        mapper.toOutboundMessage(attributes, "hello".getBytes(StandardCharsets.UTF_8), null);
+        mapper.toOutboundMessage(
+            attributes, "hello".getBytes(StandardCharsets.UTF_8), "queue://orders");
 
     assertEquals("msg-1", outboundMessage.messageId());
     assertEquals("corr-1", outboundMessage.correlationId());
@@ -71,7 +72,10 @@ class FlowFileAttributeMapperTest {
     assertTrue(attributes.containsKey("amqp.header.priority"));
   }
 
-  /** Verifies that a textual payload kind emits a String-backed AMQP body while preserving byte[] semantics otherwise. */
+  /**
+   * Verifies that a textual payload kind emits a String-backed AMQP body while preserving byte[]
+   * semantics otherwise.
+   */
   @Test
   void shouldCreateTextMessageBodyWhenPayloadKindIsText() {
     final FlowFileAttributeMapper mapper = new FlowFileAttributeMapper(new ObjectMapper());
@@ -99,6 +103,71 @@ class FlowFileAttributeMapperTest {
       assertEquals("text/plain", message.contentType());
     } catch (final Exception exception) {
       throw new AssertionError("Expected a TEXT payload to be emitted as a String body", exception);
+    }
+  }
+
+  /** Verifies that payload-kind resolution falls back to the runtime object type. */
+  @Test
+  void shouldResolvePayloadKindFromBodyType() {
+    assertEquals("TEXT", FlowFileAttributeMapper.resolvePayloadKind("hello", null));
+    assertEquals(
+        "STRUCTURED", FlowFileAttributeMapper.resolvePayloadKind(Map.of("tenant", "acme"), null));
+    assertEquals("STRUCTURED", FlowFileAttributeMapper.resolvePayloadKind(Boolean.TRUE, null));
+    assertEquals("BINARY", FlowFileAttributeMapper.resolvePayloadKind(new byte[] {1, 2, 3}, null));
+  }
+
+  /**
+   * Verifies that outgoing payload bytes preserve UTF-8 text semantics and structured payload
+   * serialization.
+   */
+  @Test
+  void shouldSerializePayloadsForFlowFileContent() {
+    final FlowFileAttributeMapper mapper = new FlowFileAttributeMapper(new ObjectMapper());
+
+    assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), mapper.toPayloadBytes("hello"));
+    assertEquals(0, mapper.toPayloadBytes(null).length);
+    assertEquals(
+        "{\"tenant\":\"acme\"}",
+        new String(mapper.toPayloadBytes(Map.of("tenant", "acme")), StandardCharsets.UTF_8));
+  }
+
+  /**
+   * Verifies that a mapped AMQP message carries the expected metadata and application properties.
+   */
+  @Test
+  void shouldBuildMessageFromOutboundMetadata() {
+    final FlowFileAttributeMapper mapper = new FlowFileAttributeMapper(new ObjectMapper());
+    final OutboundMessage outboundMessage =
+        new OutboundMessage(
+            "hello".getBytes(StandardCharsets.UTF_8),
+            "topic://orders",
+            "msg-4",
+            1000L,
+            "corr-4",
+            "subject-4",
+            "queue://replies",
+            "application/json",
+            "utf-8",
+            Map.of("tenant", "acme"),
+            Map.of(),
+            true,
+            (byte) 4,
+            3000L,
+            PayloadKindType.TEXT.name());
+
+    try {
+      final var message = mapper.toMessage(outboundMessage);
+
+      assertEquals("topic://orders", message.to());
+      assertEquals("msg-4", message.messageId());
+      assertEquals("corr-4", message.correlationId());
+      assertEquals("subject-4", message.subject());
+      assertEquals("application/json", message.contentType());
+      assertEquals("acme", message.property("tenant"));
+      assertEquals("hello", message.body());
+    } catch (final Exception exception) {
+      throw new AssertionError(
+          "Expected a valid Proton message to be emitted from the outbound model", exception);
     }
   }
 }

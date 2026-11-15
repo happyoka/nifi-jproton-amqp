@@ -17,7 +17,6 @@ import org.apache.qpid.protonj2.client.exceptions.ClientException;
 public class AmqpPublisher extends AmqpWorker {
 
   private final Sender sender;
-  private final String address;
   private final boolean topicDestinationType;
   private final long senderTimeout;
   private final PayloadGenerator payloadGenerator;
@@ -27,7 +26,6 @@ public class AmqpPublisher extends AmqpWorker {
    * an anonymous sender link for publishing messages to the broker.
    *
    * @param connection the underlying AMQP client connection to the broker
-   * @param address the target address associated with this publisher instance
    * @param topicDestinationType flag indicating whether the destination is treated as a Topic
    *     (true) or a Queue (false)
    * @param senderTimeout the timeout duration in milliseconds for sending operations and
@@ -38,7 +36,6 @@ public class AmqpPublisher extends AmqpWorker {
    */
   public AmqpPublisher(
       final Connection connection,
-      final String address,
       final boolean topicDestinationType,
       final long senderTimeout,
       final ComponentLog processorLog)
@@ -47,7 +44,6 @@ public class AmqpPublisher extends AmqpWorker {
     this.payloadGenerator = new PayloadGenerator();
     this.topicDestinationType = topicDestinationType;
     this.senderTimeout = senderTimeout;
-    this.address = address;
     this.sender = session.openAnonymousSender();
   }
 
@@ -75,28 +71,28 @@ public class AmqpPublisher extends AmqpWorker {
   }
 
   /**
-   * Publishes a message to the AMQP broker using the provided FlowFile and ProcessSession. The
-   * message is constructed based on the FlowFile attributes and payload, and sent to the broker
-   * using the configured sender. If the message fails to be sent or acknowledged, a
-   * RetryableAmqpException is thrown to indicate that the operation can be retried.
+   * Publishes a message to the AMQP broker using the provided FlowFile and ProcessSession, with an
+   * address override for a specific FlowFile evaluation. The message is constructed based on the
+   * FlowFile attributes and payload, and sent to the broker using the configured sender. If the
+   * message fails to be sent or acknowledged, a RetryableAmqpException is thrown to indicate that
+   * the operation can be retried.
    *
    * @param flowFile instance of {@link FlowFile}
    * @param session instance of {@link ProcessSession}
+   * @param addressOverride the effective destination address for this message
    */
-  public void publish(final FlowFile flowFile, final ProcessSession session) {
+  public void publish(
+      final FlowFile flowFile, final ProcessSession session, final String addressOverride) {
+    final String effectiveAddress = buildAddress(addressOverride);
     final OutboundMessage outboundMessage =
         mapper.toOutboundMessage(
-            flowFile.getAttributes(), payloadGenerator.read(session, flowFile), null);
-    final String address =
-        outboundMessage.address() != null && !outboundMessage.address().isBlank()
-            ? outboundMessage.address()
-            : this.address;
+            flowFile.getAttributes(), payloadGenerator.read(session, flowFile), effectiveAddress);
     try {
       final Message<?> message =
           mapper.toMessage(
               new OutboundMessage(
                   outboundMessage.body(),
-                  this.buildAddress(address),
+                  outboundMessage.address(),
                   outboundMessage.messageId(),
                   outboundMessage.creationTime(),
                   outboundMessage.correlationId(),
@@ -110,14 +106,6 @@ public class AmqpPublisher extends AmqpWorker {
                   outboundMessage.priority(),
                   outboundMessage.timeToLive(),
                   outboundMessage.payloadKind()));
-      this.processorLog.debug(
-          "Publishing AMQP message: address={}, payloadKind={}, contentType={}, bodyLength={}, messageId={}, subject={}",
-          this.buildAddress(address),
-          outboundMessage.payloadKind(),
-          outboundMessage.contentType(),
-          outboundMessage.body() == null ? 0 : outboundMessage.body().length,
-          outboundMessage.messageId(),
-          outboundMessage.subject());
       final Tracker tracker =
           outboundMessage.deliveryAnnotations().isEmpty()
               ? sender.send(message)

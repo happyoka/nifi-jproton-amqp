@@ -154,7 +154,7 @@ public class ConsumeAmqp10 extends AbstractAmqpProcessor<AmqpConsumer> {
   protected synchronized AmqpConsumer createAMQPWorker(
       ProcessContext context, Connection connection) {
     try {
-      final String address = context.getProperty(ADDRESS).getValue();
+      final String address = context.getProperty(ADDRESS).evaluateAttributeExpressions().getValue();
       final boolean autoAcknowledge = context.getProperty(AUTO_ACKNOWLEDGE).asBoolean();
       final int creditWindow = context.getProperty(CREDIT_WINDOW).asInteger();
       final var receiveTimeout =
