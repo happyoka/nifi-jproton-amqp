@@ -26,6 +26,7 @@ public class AmqpPublisher extends AmqpWorker {
    * an anonymous sender link for publishing messages to the broker.
    *
    * @param connection the underlying AMQP client connection to the broker
+   * @param address the target address associated with this publisher instance
    * @param topicDestinationType flag indicating whether the destination is treated as a Topic
    *     (true) or a Queue (false)
    * @param senderTimeout the timeout duration in milliseconds for sending operations and
@@ -36,6 +37,7 @@ public class AmqpPublisher extends AmqpWorker {
    */
   public AmqpPublisher(
       final Connection connection,
+      final String address,
       final boolean topicDestinationType,
       final long senderTimeout,
       final ComponentLog processorLog)
@@ -44,7 +46,8 @@ public class AmqpPublisher extends AmqpWorker {
     this.payloadGenerator = new PayloadGenerator();
     this.topicDestinationType = topicDestinationType;
     this.senderTimeout = senderTimeout;
-    this.sender = session.openAnonymousSender();
+    this.sender =
+        topicDestinationType ? session.openAnonymousSender() : session.openSender(address);
   }
 
   /**
@@ -83,10 +86,11 @@ public class AmqpPublisher extends AmqpWorker {
    */
   public void publish(
       final FlowFile flowFile, final ProcessSession session, final String addressOverride) {
-    final String effectiveAddress = buildAddress(addressOverride);
     final OutboundMessage outboundMessage =
         mapper.toOutboundMessage(
-            flowFile.getAttributes(), payloadGenerator.read(session, flowFile), effectiveAddress);
+            flowFile.getAttributes(),
+            payloadGenerator.read(session, flowFile),
+            this.buildAddress(addressOverride));
     try {
       final Message<?> message =
           mapper.toMessage(
@@ -106,6 +110,7 @@ public class AmqpPublisher extends AmqpWorker {
                   outboundMessage.priority(),
                   outboundMessage.timeToLive(),
                   outboundMessage.payloadKind()));
+
       final Tracker tracker =
           outboundMessage.deliveryAnnotations().isEmpty()
               ? sender.send(message)

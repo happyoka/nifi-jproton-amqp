@@ -128,7 +128,7 @@ public final class FlowFileAttributeMapper {
     }
     return new OutboundMessage(
         body,
-        address,
+        address != null ? address : attributes.get("amqp.to"),
         attributes.get("amqp.message-id"),
         toLong(attributes.get("amqp.creationTime")),
         attributes.get("amqp.correlation-id"),

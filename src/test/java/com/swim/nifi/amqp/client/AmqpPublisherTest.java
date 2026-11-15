@@ -1,8 +1,6 @@
 package com.swim.nifi.amqp.client;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 import com.swim.nifi.amqp.exception.RetryableAmqpException;
 import java.io.ByteArrayInputStream;
@@ -10,6 +8,7 @@ import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.ProcessSession;
@@ -30,12 +29,12 @@ class AmqpPublisherTest {
             ProcessSession.class.getClassLoader(),
             new Class<?>[] {ProcessSession.class},
             (proxy, method, args) -> {
-                if (method.getName().equals("read")) {
-                    final InputStreamCallback callback = (InputStreamCallback) args[1];
-                    callback.process(new ByteArrayInputStream(payload));
-                    return null;
-                }
-                return defaultValue(method.getReturnType());
+              if (method.getName().equals("read")) {
+                final InputStreamCallback callback = (InputStreamCallback) args[1];
+                callback.process(new ByteArrayInputStream(payload));
+                return null;
+              }
+              return defaultValue(method.getReturnType());
             });
   }
 
@@ -44,12 +43,13 @@ class AmqpPublisherTest {
         Proxy.newProxyInstance(
             FlowFile.class.getClassLoader(),
             new Class<?>[] {FlowFile.class},
-            (proxy, method, args) -> switch (method.getName()) {
-                case "getAttributes" -> attributes;
-                case "getAttribute" -> attributes.get(args[0]);
-                case "getSize" -> size;
-                default -> defaultValue(method.getReturnType());
-            });
+            (proxy, method, args) ->
+                switch (method.getName()) {
+                  case "getAttributes" -> attributes;
+                  case "getAttribute" -> attributes.get(args[0]);
+                  case "getSize" -> size;
+                  default -> defaultValue(method.getReturnType());
+                });
   }
 
   private static Connection connectionProxy(final Session session) {
@@ -57,25 +57,32 @@ class AmqpPublisherTest {
         Proxy.newProxyInstance(
             Connection.class.getClassLoader(),
             new Class<?>[] {Connection.class},
-            (proxy, method, args) -> switch (method.getName()) {
-                case "openFuture" -> new CompletableFuture<Connection>();
-                case "openSession" -> session;
-                case "openAnonymousSender" -> null;
-                default -> defaultValue(method.getReturnType());
-            });
+            (proxy, method, args) ->
+                switch (method.getName()) {
+                  case "openFuture" -> new CompletableFuture<Connection>();
+                  case "openSession" -> session;
+                  case "openAnonymousSender" -> null;
+                  default -> defaultValue(method.getReturnType());
+                });
   }
 
   private static Session sessionProxy(final Sender sender) {
+    return sessionProxy(sender, sender);
+  }
+
+  private static Session sessionProxy(final Sender anonymousSender, final Sender queueSender) {
     return (Session)
         Proxy.newProxyInstance(
             Session.class.getClassLoader(),
             new Class<?>[] {Session.class},
-            (proxy, method, args) -> switch (method.getName()) {
-                case "openFuture" -> new CompletableFuture<Session>();
-                case "openAnonymousSender" -> sender;
-                case "close" -> null;
-                default -> defaultValue(method.getReturnType());
-            });
+            (proxy, method, args) ->
+                switch (method.getName()) {
+                  case "openFuture" -> new CompletableFuture<Session>();
+                  case "openAnonymousSender" -> anonymousSender;
+                  case "openSender" -> queueSender;
+                  case "close" -> null;
+                  default -> defaultValue(method.getReturnType());
+                });
   }
 
   private static Sender senderProxy(final SendAction sendAction) {
@@ -83,18 +90,21 @@ class AmqpPublisherTest {
         Proxy.newProxyInstance(
             Sender.class.getClassLoader(),
             new Class<?>[] {Sender.class},
-            (proxy, method, args) -> switch (method.getName()) {
-                case "send" -> {
+            (proxy, method, args) ->
+                switch (method.getName()) {
+                  case "send" -> {
                     if (args.length == 1) {
-                        yield sendAction.send((Message<?>) args[0], null);
+                      yield sendAction.send((Message<?>) args[0], null);
                     }
                     yield sendAction.send((Message<?>) args[0], (Map<String, Object>) args[1]);
-                }
-                case "close" -> null;
-                case "trySend" -> sendAction.send(
-                        (Message<?>) args[0], args.length > 1 ? (Map<String, Object>) args[1] : null);
-                default -> defaultValue(method.getReturnType());
-            });
+                  }
+                  case "close" -> null;
+                  case "trySend" ->
+                      sendAction.send(
+                          (Message<?>) args[0],
+                          args.length > 1 ? (Map<String, Object>) args[1] : null);
+                  default -> defaultValue(method.getReturnType());
+                });
   }
 
   private static Tracker trackerProxy() {
@@ -102,12 +112,13 @@ class AmqpPublisherTest {
         Proxy.newProxyInstance(
             Tracker.class.getClassLoader(),
             new Class<?>[] {Tracker.class},
-            (proxy, method, args) -> switch (method.getName()) {
-                case "awaitAccepted" -> proxy;
-                case "awaitSettlement" -> proxy;
-                case "sender" -> null;
-                default -> defaultValue(method.getReturnType());
-            });
+            (proxy, method, args) ->
+                switch (method.getName()) {
+                  case "awaitAccepted" -> proxy;
+                  case "awaitSettlement" -> proxy;
+                  case "sender" -> null;
+                  default -> defaultValue(method.getReturnType());
+                });
   }
 
   private static ComponentLog componentLogProxy() {
@@ -155,6 +166,7 @@ class AmqpPublisherTest {
     attributes.put("amqp.payload-kind", "TEXT");
     attributes.put("amqp.content-type", "text/plain");
     attributes.put("amqp.message-id", "msg-42");
+    attributes.put("amqp.to", "topic://abcd");
     attributes.put("amqp.subject", "orders.created");
     attributes.put("amqp.application.tenant", "acme");
 
@@ -171,10 +183,44 @@ class AmqpPublisherTest {
     final Connection connection = connectionProxy(session);
     final ComponentLog log = componentLogProxy();
 
-    final AmqpPublisher publisher = new AmqpPublisher(connection, true, 500L, log);
+    final AmqpPublisher publisher = new AmqpPublisher(connection, "address", true, 500L, log);
     publisher.publish(flowFile, processSession(payload), "orders");
 
     assertEquals("topic://orders", capturedMessage[0].to());
+    assertEquals("msg-42", capturedMessage[0].messageId());
+    assertEquals("orders.created", capturedMessage[0].subject());
+    assertEquals("text/plain", capturedMessage[0].contentType());
+    assertEquals("acme", capturedMessage[0].property("tenant"));
+    assertEquals("hello world", capturedMessage[0].body());
+  }
+
+  @Test
+  void shouldPublishFlowFilePayloadToQueueAddressWithMappedMetadata() throws Exception {
+    final Map<String, String> attributes = new HashMap<>();
+    attributes.put("amqp.payload-kind", "TEXT");
+    attributes.put("amqp.content-type", "text/plain");
+    attributes.put("amqp.message-id", "msg-42");
+    attributes.put("amqp.to", "topic://abcd");
+    attributes.put("amqp.subject", "orders.created");
+    attributes.put("amqp.application.tenant", "acme");
+
+    final byte[] payload = "hello world".getBytes();
+    final FlowFile flowFile = flowFile(attributes, payload.length);
+    final Message<?>[] capturedMessage = new Message<?>[1];
+    final Sender sender =
+        senderProxy(
+            (message, annotations) -> {
+              capturedMessage[0] = message;
+              return trackerProxy();
+            });
+    final Session session = sessionProxy(sender);
+    final Connection connection = connectionProxy(session);
+    final ComponentLog log = componentLogProxy();
+
+    final AmqpPublisher publisher = new AmqpPublisher(connection, "queue-test", false, 500L, log);
+    publisher.publish(flowFile, processSession(payload), null);
+
+    assertEquals("topic://abcd", capturedMessage[0].to());
     assertEquals("msg-42", capturedMessage[0].messageId());
     assertEquals("orders.created", capturedMessage[0].subject());
     assertEquals("text/plain", capturedMessage[0].contentType());
@@ -194,7 +240,7 @@ class AmqpPublisherTest {
     final Connection connection = connectionProxy(session);
     final ComponentLog log = componentLogProxy();
 
-    final AmqpPublisher publisher = new AmqpPublisher(connection, false, 250L, log);
+    final AmqpPublisher publisher = new AmqpPublisher(connection, "address", false, 250L, log);
 
     final RetryableAmqpException exception =
         assertThrows(
@@ -203,6 +249,68 @@ class AmqpPublisherTest {
 
     assertEquals("Failed to publish message", exception.getMessage());
     assertInstanceOf(RuntimeException.class, exception.getCause());
+  }
+
+  @Test
+  void shouldUseAnonymousSenderForTopicDestination() throws Exception {
+    final AtomicBoolean anonymousSenderCalled = new AtomicBoolean(false);
+    final Sender anonymousSender =
+        senderProxy(
+            (message, annotations) -> {
+              anonymousSenderCalled.set(true);
+              return trackerProxy();
+            });
+    final Session session =
+        (Session)
+            Proxy.newProxyInstance(
+                Session.class.getClassLoader(),
+                new Class<?>[] {Session.class},
+                (proxy, method, args) ->
+                    switch (method.getName()) {
+                      case "openFuture" -> new CompletableFuture<Session>();
+                      case "openAnonymousSender" -> {
+                        anonymousSenderCalled.set(true);
+                        yield anonymousSender;
+                      }
+                      default -> defaultValue(method.getReturnType());
+                    });
+    final Connection connection = connectionProxy(session);
+    final ComponentLog log = componentLogProxy();
+    final FlowFile flowFile = flowFile(Map.of("amqp.payload-kind", "TEXT"), 5L);
+    final AmqpPublisher publisher = new AmqpPublisher(connection, "orders", true, 500L, log);
+    publisher.publish(flowFile, processSession("hello".getBytes()), "topic://orders");
+    assertTrue(anonymousSenderCalled.get());
+  }
+
+  @Test
+  void shouldUseBoundSenderForQueueDestination() throws Exception {
+    final String[] openSenderAddress = new String[1];
+    final Sender queueSender =
+        senderProxy(
+            (message, annotations) -> trackerProxy());
+    final Session session =
+        (Session)
+            Proxy.newProxyInstance(
+                Session.class.getClassLoader(),
+                new Class<?>[] {Session.class},
+                (proxy, method, args) ->
+                    switch (method.getName()) {
+                      case "openFuture" -> new CompletableFuture<Session>();
+                      case "openSender" -> {
+                        openSenderAddress[0] = (String) args[0];
+                        yield queueSender;
+                      }
+                      case "close" -> null;
+                      default -> defaultValue(method.getReturnType());
+                    });
+    final Connection connection = connectionProxy(session);
+    final ComponentLog log = componentLogProxy();
+    final FlowFile flowFile = flowFile(Map.of("amqp.payload-kind", "TEXT"), 5L);
+
+    final AmqpPublisher publisher = new AmqpPublisher(connection, "orders", false, 500L, log);
+    publisher.publish(flowFile, processSession("hello".getBytes()), "orders");
+
+    assertEquals("orders", openSenderAddress[0]);
   }
 
   @FunctionalInterface
