@@ -15,6 +15,7 @@ import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.expression.ExpressionLanguageScope;
+import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processor.DataUnit;
 import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.processor.ProcessSession;
@@ -45,6 +46,10 @@ import org.apache.qpid.protonj2.client.exceptions.ClientException;
   @ReadsAttribute(
       attribute = "amqp.application.*",
       description = "Mapped to AMQP application properties."),
+  @ReadsAttribute(
+      attribute = "amqp.deferred-ack.token",
+      description =
+          "Deferred source acknowledgement token emitted by ConsumeAmqp10 when post-publish acknowledgement is enabled."),
 })
 public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
   /**
@@ -151,6 +156,7 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
             .asDataSize(DataUnit.B)
             .longValue();
     if (flowFile.getSize() > maximumInputFlowFileSize) {
+      settleDeferredAcknowledgement(flowFile, false);
       getLogger()
           .warn(
               "FlowFile {} with size {} bytes exceeds configured maximum input FlowFile size of {} bytes; routing to failure",
@@ -162,13 +168,29 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
     }
     try {
       publisher.publish(flowFile, session, address);
+      settleDeferredAcknowledgement(flowFile, true);
       session.transfer(flowFile, REL_SUCCESS);
     } catch (RetryableAmqpException e) {
+      settleDeferredAcknowledgement(flowFile, false);
       session.rollback();
       throw e;
     } catch (Exception e) {
+      settleDeferredAcknowledgement(flowFile, false);
       session.transfer(flowFile, REL_FAILURE);
       throw e;
+    }
+  }
+
+  private void settleDeferredAcknowledgement(final FlowFile flowFile, final boolean success) {
+    final String token =
+        flowFile.getAttribute(DeferredAcknowledgementRegistry.DEFERRED_ACK_TOKEN_ATTRIBUTE);
+    if (token == null || token.isBlank()) {
+      return;
+    }
+    if (success) {
+      DeferredAcknowledgementRegistry.settleSuccess(token);
+    } else {
+      DeferredAcknowledgementRegistry.settleRetry(token);
     }
   }
 
