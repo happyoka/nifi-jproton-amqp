@@ -5,6 +5,7 @@ import com.swim.nifi.amqp.mapping.FlowFileAttributeMapper;
 import com.swim.nifi.amqp.model.ConsumedMessage;
 import com.swim.nifi.amqp.model.InboundMessage;
 import com.swim.nifi.amqp.model.SettlementMode;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -39,6 +40,8 @@ public class AmqpConsumer extends AmqpWorker implements Runnable {
    *
    * @param connection the underlying AMQP client connection to the broker
    * @param address the target address (queue or topic) to consume messages from
+   * @param topicDestinationType whether the target address represents a topic destination, adding
+   *     the {@code TOPIC} capability to source options when {@code true}
    * @param autoAcknowledge whether messages should be automatically accepted upon delivery
    * @param creditWindow the flow control credit window size; a value of {@code 0} requires manual
    *     credit replenishment via {@code receiver.addCredit(1)}
@@ -51,6 +54,7 @@ public class AmqpConsumer extends AmqpWorker implements Runnable {
   public AmqpConsumer(
       final Connection connection,
       final String address,
+      final boolean topicDestinationType,
       final boolean autoAcknowledge,
       final int creditWindow,
       final long receiveTimeout,
@@ -62,6 +66,9 @@ public class AmqpConsumer extends AmqpWorker implements Runnable {
     this.creditWindow = creditWindow;
     final var receiverOptions =
         new ReceiverOptions().autoAccept(autoAcknowledge).creditWindow(creditWindow);
+    if (topicDestinationType) {
+      receiverOptions.sourceOptions().capabilities("TOPIC");
+    }
     this.receiver = session.openReceiver(this.address, receiverOptions);
     if (this.creditWindow == 0) {
       receiver.addCredit(1);
@@ -95,6 +102,7 @@ public class AmqpConsumer extends AmqpWorker implements Runnable {
       final InboundMessage inboundMessage =
           new InboundMessage(
               mapper.toPayloadBytes(body),
+              new String(message.userId(), StandardCharsets.UTF_8),
               stringValue(message.messageId()),
               stringValue(message.correlationId()),
               message.subject(),
@@ -106,6 +114,9 @@ public class AmqpConsumer extends AmqpWorker implements Runnable {
               message.priority(),
               message.timeToLive(),
               message.creationTime(),
+              message.groupId(),
+              message.groupSequence(),
+              message.replyToGroupId(),
               copyProperties(message),
               annotations,
               payloadKind);

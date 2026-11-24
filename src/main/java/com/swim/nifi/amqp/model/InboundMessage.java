@@ -7,6 +7,7 @@ import java.util.Map;
  *
  * @param body payload bytes
  * @param messageId AMQP message-id value
+ * @param userId AMQP user-id value
  * @param correlationId AMQP correlation-id value
  * @param subject AMQP subject value
  * @param to AMQP to address
@@ -17,12 +18,16 @@ import java.util.Map;
  * @param priority priority header value
  * @param timeToLive time-to-live header value in milliseconds
  * @param creationTime creation timestamp header value in milliseconds
+ * @param groupId AMQP group-id value identifying the message group
+ * @param groupSequence AMQP group-sequence value indicating sequence within the message group
+ * @param replyToGroupId AMQP reply-to-group-id value for group-scoped replies
  * @param applicationProperties AMQP application properties
  * @param deliveryAnnotations AMQP delivery annotations
  * @param payloadKind logical payload kind, such as TEXT or BINARY, carried as metadata
  */
 public record InboundMessage(
     byte[] body,
+    String userId,
     String messageId,
     String correlationId,
     String subject,
@@ -34,6 +39,9 @@ public record InboundMessage(
     Byte priority,
     Long timeToLive,
     Long creationTime,
+    String groupId,
+    int groupSequence,
+    String replyToGroupId,
     Map<String, Object> applicationProperties,
     Map<String, Object> deliveryAnnotations,
     String payloadKind) {}

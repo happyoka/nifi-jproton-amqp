@@ -61,24 +61,6 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
           .build();
 
   /**
-   * Property descriptor defining whether the messaging destination functions as a Queue
-   * (point-to-point / anycast) or a Topic (publish-subscribe / multicast).
-   *
-   * <p>This governs how the client and broker route messages—directing payloads to a single
-   * consumer queue or broadcasting them across multiple subscriptions depending on the underlying
-   * messaging implementation.
-   */
-  static final PropertyDescriptor DESTINATION_TYPE =
-      new PropertyDescriptor.Builder()
-          .name("Destination Type")
-          .description("The type of destination to use (either a Queue or a Topic).")
-          .required(true)
-          .allowableValues("QUEUE", "TOPIC")
-          .defaultValue("TOPIC")
-          .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
-          .build();
-
-  /**
    * The relationship representing FlowFiles that have been successfully processed, produced, or
    * consumed and routed onward in the NiFi data flow.
    */
@@ -133,7 +115,7 @@ public class PublishAmqp10 extends AbstractAmqpProcessor<AmqpPublisher> {
   static final List<PropertyDescriptor> PROPERTY_DESCRIPTORS =
       Stream.concat(
               getCommonPropertyDescriptors().stream(),
-              Stream.of(DESTINATION_TYPE, SEND_TIMEOUT, MAXIMUM_INPUT_FLOWFILE_SIZE))
+              Stream.of(SEND_TIMEOUT, MAXIMUM_INPUT_FLOWFILE_SIZE))
           .toList();
 
   boolean isTopic = false;

@@ -68,7 +68,6 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
           .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
           .build();
-
   /** A property descriptor defining the username used for connecting to the broker */
   protected static final PropertyDescriptor USERNAME =
       new PropertyDescriptor.Builder()
@@ -77,7 +76,6 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .required(false)
           .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
           .build();
-
   /** A property descriptor defining the password used for connecting to the broker */
   protected static final PropertyDescriptor PASSWORD =
       new PropertyDescriptor.Builder()
@@ -87,7 +85,6 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .sensitive(true)
           .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
           .build();
-
   /** A property descriptor defining the virtual host used for connecting to the broker */
   protected static final PropertyDescriptor VIRTUAL_HOST =
       new PropertyDescriptor.Builder()
@@ -97,7 +94,6 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .required(false)
           .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
           .build();
-
   /**
    * A property descriptor allowing users to configure a custom client identifier for the AMQP
    * connection. This identifier is used to uniquely track the client container with the message
@@ -112,7 +108,6 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .required(false)
           .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
           .build();
-
   /** A property descriptor defining the reconnect enabled for connection option */
   protected static final PropertyDescriptor RECONNECT_ENABLED =
       new PropertyDescriptor.Builder()
@@ -124,7 +119,6 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .allowableValues("true", "false")
           .addValidator(StandardValidators.BOOLEAN_VALIDATOR)
           .build();
-
   /** A property descriptor defining the trace frames for connection option */
   protected static final PropertyDescriptor TRACE_FRAMES =
       new PropertyDescriptor.Builder()
@@ -136,7 +130,6 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .allowableValues("true", "false")
           .addValidator(StandardValidators.BOOLEAN_VALIDATOR)
           .build();
-
   /**
    * A property descriptor indicating whether Transport Layer Security (TLS) should be enabled for
    * secure communication channels with the AMQP broker.
@@ -150,7 +143,6 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .allowableValues("true", "false")
           .addValidator(StandardValidators.BOOLEAN_VALIDATOR)
           .build();
-
   /**
    * A property descriptor defining the NiFi SSL Context Service used to supply secure socket layer
    * (SSL/TLS) key store and trust store settings for broker connections.
@@ -163,7 +155,6 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .required(false)
           .identifiesControllerService(SSLContextService.class)
           .build();
-
   /**
    * A property descriptor that determines whether the client should verify the broker's hostname
    * against its TLS/SSL certificate during the secure handshake.
@@ -177,7 +168,6 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .allowableValues("true", "false")
           .addValidator(StandardValidators.BOOLEAN_VALIDATOR)
           .build();
-
   /**
    * A property descriptor that determines whether to trust all server certificates during the TLS
    * handshake, typically used for testing or development environments to bypass strict certificate
@@ -193,7 +183,6 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .allowableValues("true", "false")
           .addValidator(StandardValidators.BOOLEAN_VALIDATOR)
           .build();
-
   /**
    * A property descriptor that determines whether a durable subscription should be established for
    * topic-based consumption, allowing the broker to retain and accumulate messages while the
@@ -210,13 +199,30 @@ abstract class AbstractAmqpProcessor<T extends AmqpWorker> extends AbstractProce
           .allowableValues("true", "false")
           .addValidator(StandardValidators.BOOLEAN_VALIDATOR)
           .build();
-
+  /**
+   * Property descriptor defining whether the messaging destination functions as a Queue
+   * (point-to-point / anycast) or a Topic (publish-subscribe / multicast).
+   *
+   * <p>This governs how the client and broker route messages—directing payloads to a single
+   * consumer queue or broadcasting them across multiple subscriptions depending on the underlying
+   * messaging implementation.
+   */
+  static final PropertyDescriptor DESTINATION_TYPE =
+      new PropertyDescriptor.Builder()
+          .name("Destination Type")
+          .description("The type of destination to use (either a Queue or a Topic).")
+          .required(true)
+          .allowableValues("QUEUE", "TOPIC")
+          .defaultValue("QUEUE")
+          .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+          .build();
   private static final List<PropertyDescriptor> PROPERTY_DESCRIPTORS =
       List.of(
           HOST,
           PORT,
           VIRTUAL_HOST,
           ADDRESS,
+          DESTINATION_TYPE,
           USERNAME,
           PASSWORD,
           CLIENT_ID,

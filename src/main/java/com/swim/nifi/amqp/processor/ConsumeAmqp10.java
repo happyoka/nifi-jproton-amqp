@@ -155,12 +155,19 @@ public class ConsumeAmqp10 extends AbstractAmqpProcessor<AmqpConsumer> {
       ProcessContext context, Connection connection) {
     try {
       final String address = context.getProperty(ADDRESS).evaluateAttributeExpressions().getValue();
+      final String destinationType = context.getProperty(DESTINATION_TYPE).getValue();
       final boolean autoAcknowledge = context.getProperty(AUTO_ACKNOWLEDGE).asBoolean();
       final int creditWindow = context.getProperty(CREDIT_WINDOW).asInteger();
       final var receiveTimeout =
           duration(context, RECEIVE_TIMEOUT, Duration.ofSeconds(15)).toMillis();
       return new AmqpConsumer(
-          connection, address, autoAcknowledge, creditWindow, receiveTimeout, getLogger());
+          connection,
+          address,
+          destinationType.equalsIgnoreCase("TOPIC"),
+          autoAcknowledge,
+          creditWindow,
+          receiveTimeout,
+          getLogger());
     } catch (final ClientException ioe) {
       throw new ProcessException("Failed to connect to AMQP Broker", ioe);
     }

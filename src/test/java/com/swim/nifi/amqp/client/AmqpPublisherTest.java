@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.swim.nifi.amqp.exception.RetryableAmqpException;
 import java.io.ByteArrayInputStream;
 import java.lang.reflect.Proxy;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -200,9 +201,13 @@ class AmqpPublisherTest {
     attributes.put("amqp.payload-kind", "TEXT");
     attributes.put("amqp.content-type", "text/plain");
     attributes.put("amqp.message-id", "msg-42");
+    attributes.put("amqp.user-id", "user-123");
     attributes.put("amqp.to", "topic://abcd");
     attributes.put("amqp.subject", "orders.created");
     attributes.put("amqp.application.tenant", "acme");
+    attributes.put("amqp.group-id", "test-group");
+    attributes.put("amqp.group-sequence", "1");
+    attributes.put("amqp.reply-to-group-id", "group-reply");
 
     final byte[] payload = "hello world".getBytes();
     final FlowFile flowFile = flowFile(attributes, payload.length);
@@ -221,10 +226,14 @@ class AmqpPublisherTest {
     publisher.publish(flowFile, processSession(payload), null);
 
     assertEquals("topic://abcd", capturedMessage[0].to());
+    assertEquals("user-123", new String(capturedMessage[0].userId(), StandardCharsets.UTF_8));
     assertEquals("msg-42", capturedMessage[0].messageId());
     assertEquals("orders.created", capturedMessage[0].subject());
     assertEquals("text/plain", capturedMessage[0].contentType());
+    assertEquals("test-group", capturedMessage[0].groupId());
+    assertEquals(1, capturedMessage[0].groupSequence());
     assertEquals("acme", capturedMessage[0].property("tenant"));
+    assertEquals("group-reply", capturedMessage[0].replyToGroupId());
     assertEquals("hello world", capturedMessage[0].body());
   }
 
@@ -285,9 +294,7 @@ class AmqpPublisherTest {
   @Test
   void shouldUseBoundSenderForQueueDestination() throws Exception {
     final String[] openSenderAddress = new String[1];
-    final Sender queueSender =
-        senderProxy(
-            (message, annotations) -> trackerProxy());
+    final Sender queueSender = senderProxy((message, annotations) -> trackerProxy());
     final Session session =
         (Session)
             Proxy.newProxyInstance(

@@ -64,6 +64,10 @@ public final class FlowFileAttributeMapper {
     return value == null ? null : Long.valueOf(value);
   }
 
+  private static Integer toInt(final String value) {
+    return value == null ? null : Integer.valueOf(value);
+  }
+
   /**
    * Resolves the payload kind based on an explicitly provided kind or by inspecting the runtime
    * type of the given body object.
@@ -129,6 +133,7 @@ public final class FlowFileAttributeMapper {
     return new OutboundMessage(
         body,
         address != null ? address : attributes.get("amqp.to"),
+        attributes.get("amqp.user-id"),
         attributes.get("amqp.message-id"),
         toLong(attributes.get("amqp.creationTime")),
         attributes.get("amqp.correlation-id"),
@@ -136,6 +141,9 @@ public final class FlowFileAttributeMapper {
         attributes.get("amqp.reply-to"),
         attributes.get("amqp.content-type"),
         attributes.get("amqp.content-encoding"),
+        attributes.get("amqp.group-id"),
+        toInt(attributes.get("amqp.group-sequence")),
+        attributes.get("amqp.reply-to-group-id"),
         applicationProperties,
         deliveryAnnotations,
         toBoolean(attributes.get("amqp.header.durable")),
@@ -164,6 +172,9 @@ public final class FlowFileAttributeMapper {
       if (outboundMessage.messageId() != null) {
         message.messageId(outboundMessage.messageId());
       }
+      if (outboundMessage.userId() != null) {
+        message.userId(outboundMessage.userId().getBytes());
+      }
       if (outboundMessage.creationTime() != null) {
         message.creationTime(outboundMessage.creationTime());
       }
@@ -191,6 +202,15 @@ public final class FlowFileAttributeMapper {
       if (outboundMessage.timeToLive() != null) {
         message.timeToLive(outboundMessage.timeToLive());
       }
+      if (outboundMessage.groupId() != null) {
+        message.groupId(outboundMessage.groupId());
+      }
+      if (outboundMessage.groupSequence() != null) {
+        message.groupSequence(outboundMessage.groupSequence());
+      }
+      if (outboundMessage.replyToGroupId() != null) {
+        message.replyToGroupId(outboundMessage.replyToGroupId());
+      }
       for (Map.Entry<String, Object> entry : outboundMessage.applicationProperties().entrySet()) {
         message.property(entry.getKey(), entry.getValue());
       }
@@ -210,6 +230,7 @@ public final class FlowFileAttributeMapper {
   public Map<String, String> toFlowFileAttributes(final InboundMessage inboundMessage) {
     final Map<String, String> attributes = new LinkedHashMap<>();
     put(attributes, "amqp.message-id", inboundMessage.messageId());
+    put(attributes, "amqp.user-id", inboundMessage.userId());
     put(attributes, "amqp.creationTime", inboundMessage.creationTime());
     put(attributes, "amqp.correlation-id", inboundMessage.correlationId());
     put(attributes, "amqp.subject", inboundMessage.subject());
@@ -217,6 +238,9 @@ public final class FlowFileAttributeMapper {
     put(attributes, "amqp.reply-to", inboundMessage.replyTo());
     put(attributes, "amqp.content-type", inboundMessage.contentType());
     put(attributes, "amqp.content-encoding", inboundMessage.contentEncoding());
+    put(attributes, "amqp.group-id", inboundMessage.groupId());
+    put(attributes, "amqp.group-sequence", inboundMessage.groupSequence());
+    put(attributes, "amqp.reply-to-group-id", inboundMessage.replyToGroupId());
     put(attributes, "amqp.header.durable", inboundMessage.durable());
     put(attributes, "amqp.header.priority", inboundMessage.priority());
     put(attributes, "amqp.header.ttl", inboundMessage.timeToLive());

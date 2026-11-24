@@ -97,6 +97,7 @@ public class AmqpPublisher extends AmqpWorker {
               new OutboundMessage(
                   outboundMessage.body(),
                   outboundMessage.address(),
+                  outboundMessage.userId(),
                   outboundMessage.messageId(),
                   outboundMessage.creationTime(),
                   outboundMessage.correlationId(),
@@ -104,6 +105,9 @@ public class AmqpPublisher extends AmqpWorker {
                   outboundMessage.replyTo(),
                   outboundMessage.contentType(),
                   outboundMessage.contentEncoding(),
+                  outboundMessage.groupId(),
+                  outboundMessage.groupSequence(),
+                  outboundMessage.replyToGroupId(),
                   outboundMessage.applicationProperties(),
                   outboundMessage.deliveryAnnotations(),
                   outboundMessage.durable(),

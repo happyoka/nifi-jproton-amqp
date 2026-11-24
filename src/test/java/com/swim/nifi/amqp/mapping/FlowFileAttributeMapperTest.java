@@ -46,6 +46,7 @@ class FlowFileAttributeMapperTest {
     final InboundMessage inboundMessage =
         new InboundMessage(
             "payload".getBytes(StandardCharsets.UTF_8),
+            "user-2",
             "msg-2",
             "corr-2",
             "subject-2",
@@ -57,6 +58,9 @@ class FlowFileAttributeMapperTest {
             (byte) 5,
             1000L,
             2000L,
+            "group-2",
+            2,
+            "reply-group-2",
             Map.of("tenant", "acme", "traceparent", "00-xyz-uvw-01", "baggage", "k=v"),
             Map.of("partition", 4),
             PayloadKindType.TEXT.name());
@@ -83,6 +87,7 @@ class FlowFileAttributeMapperTest {
         new OutboundMessage(
             "hello".getBytes(StandardCharsets.UTF_8),
             "queue://orders",
+            "user-3",
             "msg-3",
             null,
             "corr-3",
@@ -90,6 +95,9 @@ class FlowFileAttributeMapperTest {
             null,
             "text/plain",
             null,
+            "group-3",
+            3,
+            "reply-group-3",
             Map.of(),
             Map.of(),
             null,
@@ -141,6 +149,7 @@ class FlowFileAttributeMapperTest {
         new OutboundMessage(
             "hello".getBytes(StandardCharsets.UTF_8),
             "topic://orders",
+            "user-4",
             "msg-4",
             1000L,
             "corr-4",
@@ -148,6 +157,9 @@ class FlowFileAttributeMapperTest {
             "queue://replies",
             "application/json",
             "utf-8",
+            "group-4",
+            4,
+            "reply-group-4",
             Map.of("tenant", "acme"),
             Map.of(),
             true,

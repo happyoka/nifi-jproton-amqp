@@ -8,12 +8,16 @@ import java.util.Map;
  * @param body message body bytes
  * @param address AMQP destination address
  * @param messageId AMQP message-id value
+ * @param userId AMQP user-id value
  * @param creationTime creation timestamp header value in milliseconds
  * @param correlationId AMQP correlation-id value
  * @param subject AMQP subject value
  * @param replyTo AMQP reply-to address
  * @param contentType MIME content type for the body
  * @param contentEncoding content encoding for the body
+ * @param groupId AMQP group-id value identifying the message group
+ * @param groupSequence AMQP group-sequence value indicating sequence within the message group
+ * @param replyToGroupId AMQP reply-to-group-id value for group-scoped replies
  * @param applicationProperties AMQP application properties
  * @param deliveryAnnotations AMQP delivery annotations
  * @param durable durable header value
@@ -24,6 +28,7 @@ import java.util.Map;
 public record OutboundMessage(
     byte[] body,
     String address,
+    String userId,
     String messageId,
     Long creationTime,
     String correlationId,
@@ -31,6 +36,9 @@ public record OutboundMessage(
     String replyTo,
     String contentType,
     String contentEncoding,
+    String groupId,
+    Integer groupSequence,
+    String replyToGroupId,
     Map<String, Object> applicationProperties,
     Map<String, Object> deliveryAnnotations,
     Boolean durable,
